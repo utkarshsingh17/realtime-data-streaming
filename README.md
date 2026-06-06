@@ -50,7 +50,7 @@ is automatically pushed to all connected browser clients within ~500ms.**
 |---|---|---|
 | Database | MySQL | 8.0 (Docker) |
 | CDC Connector | Debezium MySQL Connector | 1.9.2.Final |
-| Message Broker | Apache Kafka + Schema Registry | Confluent 8.2.1 |
+| Message Broker | Apache Kafka (KRaft) + Schema Registry | Confluent 8.2.1 |
 | Message Format | Apache Avro | via Confluent |
 | Backend | Spring Boot | 3.2.5 |
 | Language | Java | 21 |
@@ -166,17 +166,41 @@ You should see at least one `mysql-bin.000001` file listed.
 
 ## Step 3 — Start Confluent Platform
 
-Start ZooKeeper, Kafka, and Schema Registry:
+Confluent 8.2.1 uses **KRaft mode** — ZooKeeper is completely removed.
+Kafka manages its own cluster metadata internally via the Raft consensus protocol.
+
+### Option A — Confluent CLI (recommended, starts everything at once)
+
 ```bash
-# ZooKeeper
-$CONFLUENT_HOME/bin/zookeeper-server-start \
-  $CONFLUENT_HOME/etc/kafka/zookeeper.properties &
+confluent local services start
+```
 
-# Wait a few seconds, then start Kafka
+Check all services are running:
+```bash
+confluent local services status
+```
+
+### Option B — Manual startup
+
+**1. Format the KRaft storage directory (first time only):**
+```bash
+# Generate a unique cluster ID
+KAFKA_CLUSTER_ID=$($CONFLUENT_HOME/bin/kafka-storage random-uuid)
+
+# Format the storage directory
+$CONFLUENT_HOME/bin/kafka-storage format \
+  -t $KAFKA_CLUSTER_ID \
+  -c $CONFLUENT_HOME/etc/kafka/kraft/server.properties
+```
+
+**2. Start Kafka (KRaft mode — no ZooKeeper):**
+```bash
 $CONFLUENT_HOME/bin/kafka-server-start \
-  $CONFLUENT_HOME/etc/kafka/server.properties &
+  $CONFLUENT_HOME/etc/kafka/kraft/server.properties &
+```
 
-# Schema Registry
+**3. Start Schema Registry:**
+```bash
 $CONFLUENT_HOME/bin/schema-registry-start \
   $CONFLUENT_HOME/etc/schema-registry/schema-registry.properties &
 ```
@@ -530,8 +554,7 @@ kafka-avro-console-consumer \
 | Service | Port |
 |---|---|
 | MySQL | 3306 |
-| ZooKeeper | 2181 |
-| Kafka | 9092 |
+| Kafka (KRaft) | 9092 |
 | Schema Registry | 8081 |
 | Kafka Connect | 8083 |
 | Spring Boot | 8080 |
